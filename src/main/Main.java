@@ -20,23 +20,23 @@ import program.ShaderProgram;
 
 public class Main implements GLEventListener, MouseListener {
 	private static class Constants {
-		public static final String	windowTitle		= "GLView";
-		public static final int		alphaBits		= 8;
-		public static final int		depthBits		= 24;
-		public static final boolean	doubleBuffered	= true;
-		public static final int		fps				= 60;
-		public static final int		windowWidth		= 400;
-		public static final int		windowHeight	= 400;
-		public static final String	shaderProgram	= "shaderProgram";
-		public static final float	startIteration	= 360;
-		public static final float	maxValue		= 2;
-		public static final int		rotationField	= 1;
-		public static final float	mouseWheelUp	= 1;
-		public static final float	mouseWheelDown	= -1;
-		public static final float	startScale		= 1;
-		public static final float	scaleUpFactor	= 1.1f;
-		public static final float	scaleDownFactor	= 0.9f;
-		public static final int		matrixSize		= 16;
+		public static final String  windowTitle     = "Mandelbrot Set";
+		public static final int     alphaBits       = 8;
+		public static final int     depthBits       = 24;
+		public static final boolean doubleBuffered  = true;
+		public static final int     fps             = 60;
+		public static final int     windowWidth     = 800;
+		public static final int     windowHeight    = 800;
+		public static final String  shaderProgram   = "shaderProgram";
+		public static final float   startIteration  = 360;
+		public static final float   maxValue        = 2;
+		public static final int     rotationField   = 1;
+		public static final float   mouseWheelUp    = -1;
+		public static final float   mouseWheelDown  = 1;
+		public static final int     matrixSize      = 16;
+		public static final float   startScale      = 1;
+		public static final float   scaleUpFactor   = 1.1f;
+		public static final float   scaleDownFactor = 0.9f;
 	}
 	
 	private static class FPSAnimatorStopper implements Runnable {
@@ -61,11 +61,26 @@ public class Main implements GLEventListener, MouseListener {
 	private int vertexArrayObjectID, vertexBufferID, elementBufferID;
 	
 	private float side, width, height;
-	private Matrix4f transform, translate, scale, cursorTranslate, cursorReturn;
+	private Matrix4f finalTransform, windowScaleTransform, windowTranslateTransform, userTransform;
 	private float[] transformArray;
-	private float maxIteration, oldX, oldY, scaleFactor;
+	private float maxIteration, oldX, oldY;
 	
 	protected Main(String windowTitle, int alphaBits, int depthBits, boolean doubleBuffer, int fps, int windowWidth, int windowHeight) {
+		this.windowScaleTransform = new Matrix4f();
+		this.windowScaleTransform.identity();
+		
+		this.windowTranslateTransform = new Matrix4f();
+		this.windowTranslateTransform.identity();
+		
+		this.finalTransform = new Matrix4f();
+		this.finalTransform.identity();
+		
+		this.userTransform = new Matrix4f();
+		this.userTransform.identity();
+		
+		this.maxIteration = Constants.startIteration;
+		this.transformArray = new float[Constants.matrixSize];
+		
 		GLProfile glProfile = GLProfile.getMaximum(true);
 		System.out.println(glProfile.toString());
 		System.out.println(glProfile.getGLImplBaseClassName());
@@ -76,24 +91,7 @@ public class Main implements GLEventListener, MouseListener {
 		GLCapabilities glCapabilities = new GLCapabilities(glProfile);
 		glCapabilities.setAlphaBits(alphaBits);
 		glCapabilities.setDepthBits(depthBits);
-		glCapabilities.setDoubleBuffered(true);
-
-		this.adjustWindowSize(windowWidth, windowHeight);
-
-		this.maxIteration = Constants.startIteration;
-		this.scaleFactor = Constants.startScale;
-		this.scale = new Matrix4f();
-		this.scale.identity()
-				.scale(this.scaleFactor, this.scaleFactor, 1);
-		this.translate = new Matrix4f();
-		this.translate.identity();
-		this.cursorTranslate = new Matrix4f(); 
-		this.cursorTranslate.identity();
-		this.cursorReturn = new Matrix4f(); 
-		this.cursorReturn.identity();
-		this.transform = new Matrix4f();
-		this.transform.identity();
-		this.transformArray = new float[Constants.matrixSize];
+		glCapabilities.setDoubleBuffered(doubleBuffer);
 
 		this.glWindow = GLWindow.create(glCapabilities);
 		this.fpsAnimator = new FPSAnimator(this.glWindow, fps, true);
@@ -105,8 +103,6 @@ public class Main implements GLEventListener, MouseListener {
 		this.glWindow.setTitle(windowTitle);
 		this.glWindow.setVisible(true);
 
-		this.adjustTransform();
-
 		this.fpsAnimator.start();
 	}	
 	
@@ -114,37 +110,21 @@ public class Main implements GLEventListener, MouseListener {
 		this(Constants.windowTitle, Constants.alphaBits, Constants.depthBits, Constants.doubleBuffered, Constants.fps, Constants.windowWidth, Constants.windowHeight);
 	}
 	
-	private void adjustWindowSize(int width, int height) {
-		this.width = width;
-		this.height = height;
-		if (this.width > this.height) {
-			this.side = this.height;
-		} else {
-			this.side = this.width;
-		}
-	}
-	
-	private void adjustTransform() {
-		this.transform.identity()
-			.scale(1 / (this.side / 2), 1 / (this.side / 2), 1)
-			.mul(this.scale)
-			.mul(this.translate)
-			.translate(-this.width / 2, -this.height / 2, 0);
-		
-		this.transform.get(this.transformArray);
-	}
-
-	@Override
-	public void dispose(GLAutoDrawable glAutoDrawable) { }
-
 	@Override
 	public void reshape(GLAutoDrawable glAutoDrawable, int x, int y, int width, int height) {
 		GL4 gl = glAutoDrawable.getGL().getGL4();
 		
 		gl.glViewport(x, y, width, height);
 		
-		this.adjustWindowSize(width, height);
-		this.adjustTransform();
+		this.width = width;
+		this.height = height;
+		this.side = (this.width > this.height) ? (this.height / 2) : (this.width / 2);
+		
+		this.windowScaleTransform.identity()
+				.scale(1 / this.side, 1 / this.side, 1);
+		
+		this.windowTranslateTransform.identity()
+				.translate(-this.width / 2, -this.height / 2, 0);
 	}
 	
 	
@@ -199,6 +179,15 @@ public class Main implements GLEventListener, MouseListener {
 		gl.glBindBuffer(GL4.GL_ELEMENT_ARRAY_BUFFER, this.elementBufferID);
 		gl.glBufferData(GL4.GL_ELEMENT_ARRAY_BUFFER, indices.length * Integer.BYTES, indicesBuffer, GL4.GL_STATIC_DRAW);
 	}
+	
+	@Override
+	public void dispose(GLAutoDrawable glAutoDrawable) {
+		GL4 gl = glAutoDrawable.getGL().getGL4();
+		
+		gl.glDeleteBuffers(2, new int[] { this.elementBufferID, this.vertexBufferID}, 0);
+		gl.glDeleteVertexArrays(1, new int[] {this.vertexArrayObjectID}, 1);
+		this.shaderProgram.delete(gl);
+	}
 
 	@Override
 	public void display(GLAutoDrawable glAutoDrawable) {
@@ -210,6 +199,12 @@ public class Main implements GLEventListener, MouseListener {
 		int maxIterationPosition = this.shaderProgram.getUniforLocation(MandelbrotShaderProgram.Uniforms.maxIteration);
 		int maxValuePosition = this.shaderProgram.getUniforLocation(MandelbrotShaderProgram.Uniforms.maxValue);
 		int transformPosition = this.shaderProgram.getUniforLocation(MandelbrotShaderProgram.Uniforms.transform);
+		
+		this.finalTransform.identity()
+				.mul(this.windowScaleTransform)
+				.mul(this.userTransform)
+				.mul(this.windowTranslateTransform)
+				.get(this.transformArray);
 		
 		gl.glUniform1f(maxIterationPosition, this.maxIteration);
 		gl.glUniform1f(maxValuePosition, Constants.maxValue);
@@ -255,33 +250,30 @@ public class Main implements GLEventListener, MouseListener {
 
 	@Override
 	public void mouseDragged(MouseEvent e) { 
-		float shiftX = (e.getX() - this.oldX) / this.scaleFactor;
-		float shiftY = -1 * (e.getY() - this.oldY) / this.scaleFactor;
+		float shiftX = -1 * (e.getX() - this.oldX);
+		float shiftY = e.getY() - this.oldY;
 		
 		this.oldX = e.getX();
 		this.oldY = e.getY();
 		
-		this.translate.translate(-shiftX, -shiftY, 0);
-		
-		this.adjustTransform();
+		this.userTransform.translate(shiftX, shiftY, 0);
 	}
 
 	@Override
-	public void mouseWheelMoved(MouseEvent e) { 
+	public void mouseWheelMoved(MouseEvent e) {
+		System.out.println(e.getX());
+		System.out.println(e.getY());
+		
 		if (e.getRotation()[Constants.rotationField] == Constants.mouseWheelUp) {
 			if (e.isControlDown()) {
 				this.maxIteration++;
 			} else {
-				float cursorX = (e.getX() - this.width / 2) / this.scaleFactor;
-				float cursorY = (this.height / 2 - e.getY()) / this.scaleFactor;
-				this.scaleFactor = this.scaleFactor * Constants.scaleUpFactor;
+				float cursorX = e.getX() - this.width / 2;
+				float cursorY = this.height / 2 - e.getY();
 				
-				this.scale.identity()
-					.translate(cursorX, cursorY, 0)
-					.scale(this.scaleFactor, this.scaleFactor, 1)
-					.translate(-cursorX, -cursorY, 0);
-
-				this.adjustTransform();
+				this.userTransform.translate(cursorX, cursorY, 0)
+						.scale(Constants.scaleUpFactor, Constants.scaleUpFactor, 1)
+						.translate(-cursorX, -cursorY, 0);
 			}
 		} else if (e.getRotation()[Constants.rotationField] == Constants.mouseWheelDown) {
 			if (e.isControlDown()) {
@@ -289,16 +281,12 @@ public class Main implements GLEventListener, MouseListener {
 					this.maxIteration--;
 				}
 			} else {
-				float cursorX = (e.getX() - this.width / 2) / this.scaleFactor;
-				float cursorY = (this.height / 2 - e.getY()) / this.scaleFactor;
-				this.scaleFactor = this.scaleFactor * Constants.scaleDownFactor;
+				float cursorX = e.getX() - this.width / 2;
+				float cursorY = this.height / 2 - e.getY();
 				
-				this.scale.identity()
-					.translate(cursorX, cursorY, 0)
-					.scale(this.scaleFactor, this.scaleFactor, 1)
-					.translate(-cursorX, -cursorY, 0);
-
-				this.adjustTransform();
+				this.userTransform.translate(cursorX, cursorY, 0)
+						.scale(Constants.scaleDownFactor, Constants.scaleDownFactor, 1)
+						.translate(-cursorX, -cursorY, 0);
 			}
 		}
 	}
